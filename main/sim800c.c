@@ -23,6 +23,8 @@ uint8_t error_count=0;
 
     DHTData_t latestDHT = {0};  // Initialize to avoid garbage
     GPSData_t latestGPS = {0};
+    ESPNowData_t latestESPNow = {0};
+
 
 
 void sim800c_reset(void){
@@ -55,7 +57,7 @@ void sim800c_reset(void){
     sim800_wait_response();
 
     // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://webhook.site/6d443caa-a92a-43b5-bc41-cd687eedc928\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.2.43.204:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
     
     // Specify content type (application/json for JSON data)
@@ -153,7 +155,7 @@ void sim800c_task(void *pvParameters) {
     sim800_wait_response();
 
     // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.2.208.195:3000/getAllSensorsData\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.2.43.204:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
     
     // Specify content type (application/json for JSON data)
@@ -202,6 +204,7 @@ void sim800_http_post_task(void) {
     {
 		DHTData_t tempDHT;
 		GPSData_t tempGPS;
+        ESPNowData_t tempESPNow;
 
 		// Try to receive new DHT data
 		if (xQueueReceive(dhtQueue, &tempDHT, pdMS_TO_TICKS(10))) {
@@ -212,15 +215,41 @@ void sim800_http_post_task(void) {
 		if (xQueueReceive(gpsQueue, &tempGPS, pdMS_TO_TICKS(2000))) {
   		  latestGPS = tempGPS;  // Update persistent copy
   		  }  	
-  		  	 
-        // Construct the JSON using the latest known values
-        char json_payload[256];
+  		 // Try to receive new ESP-NOW data (non-blocking)
+        if (xQueueReceive(espnowQueue, &tempESPNow, pdMS_TO_TICKS(10))) {
+            latestESPNow = tempESPNow;
+        }
+        // Construct the JSON payload with all available data
+        char json_payload[512];  // Increased size to accommodate all data
         snprintf(json_payload, sizeof(json_payload),
-                 "{\"temperature\":%.2f,\"humidity\":%.2f,\"latitude\":%.6f,\"longitude\":%.6f}",
-                 latestDHT.temperature,
-                 latestDHT.humidity,
-                 latestGPS.latitude,
-                 latestGPS.longitude);
+            "{"
+            "\"local_sensor\":{"
+           		 "\"id\":\"sensor-001\","
+                "\"temperature\":%.2f,"
+                "\"humidity\":%.2f,"
+                "\"latitude\":%.6f,"
+                "\"longitude\":%.6f"
+            "},"
+            "\"remote_sensor\":{"
+                "\"id\":\"%s\","
+                "\"temperature\":%.2f,"
+                "\"humidity\":%.2f,"
+                "\"latitude\":%.6f,"
+                "\"longitude\":%.6f"
+            "}"
+            "}",
+            // Local sensor data (DHT + GPS)
+            latestDHT.temperature,
+            latestDHT.humidity,
+            latestGPS.latitude,
+            latestGPS.longitude,
+            // Remote sensor data (ESP-NOW)
+            latestESPNow.sensor_id,
+            latestESPNow.temperature,
+            latestESPNow.humidity,
+            latestESPNow.latitude,
+            latestESPNow.longitude
+        );
 
         ESP_LOGI("HTTP POST", "Sending JSON: %s", json_payload);
 	

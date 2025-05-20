@@ -14,6 +14,7 @@
 #include "dht22.h"
 #include "HX711.h"
 #include "gps.h"
+#include "esp_now.h"
 
 
 #define WIFI_SSID      "TOPNET_3D78"
@@ -30,8 +31,18 @@ typedef struct {
     float longitude;
 } GPSData_t;
 
+// In your main.h or at the top of your file
+typedef struct {
+    char sensor_id[12];
+    float temperature;
+    float humidity;
+    float longitude;
+    float latitude;
+} ESPNowData_t;
+
 extern QueueHandle_t dhtQueue;
 extern QueueHandle_t gpsQueue;
+extern QueueHandle_t espnowQueue;
 
 
 
