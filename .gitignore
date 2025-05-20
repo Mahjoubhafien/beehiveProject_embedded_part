@@ -1,3 +1,27 @@
+# Build output
 build/
-sdkconfig
+
+# SDK config files
 sdkconfig.old
+
+# Optional: ignore if you don't want to version config
+# sdkconfig
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+
+# Vim/backup files
+*.bak
+*.orig
+*.swp
+*.swo
