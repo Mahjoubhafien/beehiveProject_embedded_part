@@ -111,7 +111,7 @@ void sim800_wait_response() {
 void sim800c_task(void *pvParameters) {
 	
     // Wait for SIM800C boot
-
+/*
 	sim800_send_command("AT+CFUN=1,1");
     vTaskDelay(pdMS_TO_TICKS(10000));
 
@@ -155,7 +155,7 @@ void sim800c_task(void *pvParameters) {
     sim800_wait_response();
 
     // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.2.43.204:5000/temphum\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"102.157.170.74:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
     
     // Specify content type (application/json for JSON data)
@@ -165,7 +165,7 @@ void sim800c_task(void *pvParameters) {
     // Enable redirect
 	//sim800_send_command("AT+HTTPPARA=\"REDIR\",1");
 	//sim800_wait_response();
-/*///////////////SSL/////////////////
+///////////////SSL/////////////////
 	sim800_send_command("AT+FSCREATE=\"ca.crt\"");
 	sim800_wait_response();
 	
@@ -181,9 +181,9 @@ void sim800c_task(void *pvParameters) {
     // Enable HTTPS
 	sim800_send_command("AT+HTTPSSL=1");       
 	sim800_wait_response();
-*/
-    ESP_LOGI(SIM_TAG, "SIM800C Initialization Complete.");
 
+    ESP_LOGI(SIM_TAG, "SIM800C Initialization Complete.");
+*/
 
     ///////////// Start the POST Reaquest /////////////////
 	sim800_http_post_task();
@@ -195,6 +195,11 @@ void sim800c_task(void *pvParameters) {
 
     // Optionally suspend or delete the task
     //vTaskDelete(NULL);
+    
+    
+         // Wait for 5 minutes before repeating the sequence
+       // vTaskDelay(pdMS_TO_TICKS(30000));  // 300000 ms = 5 minutes
+
 
 }
 void sim800_http_post_task(void) {
@@ -283,6 +288,10 @@ void sim800_http_post_task(void) {
     //sim800_wait_response();
 
     ESP_LOGI("SIM800C", "=== HTTP POST Done ===");
+    
+     vTaskDelay(pdMS_TO_TICKS(30000));  // 300000 ms = 5 minutes
+
+
     }
   }
   
@@ -325,69 +334,4 @@ void sim800_http_get_task(void) {
     //sim800_wait_response();
 
     ESP_LOGI("SIM800C", "=== HTTP GET Done ===");
-}
-void sim800_http_post_data_task(float temperature, float humidity, float weight, const char* location) {
-    ESP_LOGI("SIM800C", "=== Starting HTTP POST Task ===");
-
-    char json_data[256];  // Make sure it's large enough
-    int json_length;
-
-    // Format JSON string
-    snprintf(json_data, sizeof(json_data),
-             "{\"temperature\":%.2f,\"humidity\":%.2f,\"weight\":%.2f,\"location\":\"%s\"}",
-             temperature, humidity, weight, location);
-
-    json_length = strlen(json_data);
-
-    // 1. Activate bearer
-    sim800_send_command("AT+SAPBR=1,1");
-    sim800_wait_response();
-
-    // 2. Query bearer
-    sim800_send_command("AT+SAPBR=2,1");
-    sim800_wait_response();
-
-    // 3. HTTP init
-    sim800_send_command("AT+HTTPINIT");
-    sim800_wait_response();
-
-    // 4. Set CID
-    sim800_send_command("AT+HTTPPARA=\"CID\",1");
-    sim800_wait_response();
-
-    // 5. Set URL
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://webhook.site/6fbd1ac5-11b5-4b88-bd8b-536e3dbc446e\"");
-    sim800_wait_response();
-
-    // 6. Set content type
-    sim800_send_command("AT+HTTPPARA=\"CONTENT\",\"application/json\"");
-    sim800_wait_response();
-
-    // 8. Prepare to send data
-    char httpdata_cmd[32];
-    snprintf(httpdata_cmd, sizeof(httpdata_cmd), "AT+HTTPDATA=%d,10000", json_length);
-    sim800_send_command(httpdata_cmd);
-    sim800_wait_response();
-
-    // 9. Send actual data
-    sim800_send_raw(json_data);
-    sim800_wait_response();
-
-    // 10. Trigger POST
-    sim800_send_command("AT+HTTPACTION=1");
-    sim800_wait_response();
-
-    // 11. Read response
-    sim800_send_command("AT+HTTPREAD");
-    sim800_wait_response();
-
-    // 12. End HTTP
-    //sim800_send_command("AT+HTTPTERM");
-    //sim800_wait_response();
-
-    // 13. Deactivate bearer
-    //sim800_send_command("AT+SAPBR=0,1");
-    //sim800_wait_response();
-
-    ESP_LOGI("SIM800C", "=== HTTP POST Done ===");
 }

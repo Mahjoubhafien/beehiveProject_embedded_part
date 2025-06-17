@@ -26,4 +26,5 @@ void sim800_http_post_task(void);
 void sim800_send_raw(const char *data);
 void sim800_http_get_task(void);
 void sim800_http_post_data_task(float temperature, float humidity, float weight, const char* location);
+
 #endif /* MAIN_SIM800C_H_ */

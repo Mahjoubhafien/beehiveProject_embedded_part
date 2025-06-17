@@ -14,6 +14,7 @@
 #include "dht22.h"
 #include "HX711.h"
 #include "gps.h"
+#include "smsControl.h"
 #include "esp_now.h"
 
 
