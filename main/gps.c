@@ -90,7 +90,7 @@ void gps_task(void *arg) {
             ESP_LOGE("GPS", "No data received from GPS");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(1500));
     }
 
     free(data);

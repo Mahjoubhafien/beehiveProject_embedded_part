@@ -16,6 +16,8 @@
 QueueHandle_t dhtQueue;
 QueueHandle_t gpsQueue;
 QueueHandle_t espnowQueue;  // Add this with your other queue definitions
+QueueHandle_t alertConfigQueue;
+SemaphoreHandle_t sim800_uart_mutex = NULL;
 
 typedef struct __attribute__((packed)) {
     char sensor_id[12];
@@ -142,7 +144,7 @@ void sim800c_init(void){
     sim800_wait_response();
 
     // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"41.230.134.74:5000/temphum\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.14.101.52:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
     
     // Specify content type (application/json for JSON data)
@@ -183,11 +185,17 @@ void app_main(void) {
     dhtQueue = xQueueCreate(30, sizeof(DHTData_t));
     gpsQueue = xQueueCreate(30, sizeof(GPSData_t));
     espnowQueue = xQueueCreate(30, sizeof(sensor_data_t));  // Buffer 10 messages
-    
+    alertConfigQueue = xQueueCreate(1, sizeof(AlertConfig_t));
     if (dhtQueue == NULL || gpsQueue == NULL || espnowQueue == NULL) {
         ESP_LOGE(TAG, "Queue creation failed");
         return;
     }// Initialize NVS
+    sim800_uart_mutex = xSemaphoreCreateMutex();
+    if (sim800_uart_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create SIM800 UART mutex");
+        return;
+    }
+
     ESP_ERROR_CHECK(nvs_flash_init());
     
     // Initialize WiFi and ESP-NOW
@@ -200,15 +208,20 @@ void app_main(void) {
    	//GPS_UART_init();
    	 sim800c_init();
    	 
- //Start tasks
+  /////////////////////////////////////////////// Start tasks ////////////////////////////////////
  
-  xTaskCreate(dht_test, "dht21_task", 4096, NULL, 5, NULL);
-  //xTaskCreate(gps_task, "gps_task", 4096, NULL, 5, NULL);
-  xTaskCreate(sim800c_task, "sim800c_task", 4096, NULL, 5, NULL);
-  xTaskCreate(espnow_receiver_task, "espnow_receiver_task", 4096, NULL, 5, NULL);
- 
-  xTaskCreate(sms_control_task, "sms_control_task", 4096, NULL, 5, NULL);
-   ESP_LOGI(TAG, "ESP-NOW Receiver initialized and waiting for data...");
+  xTaskCreate(dht_test, "dht21_task", 4096, NULL, 6, NULL);
+  
+  //xTaskCreate(gps_task, "gps_task", 4096, NULL, 6, NULL);
+  
+  xTaskCreate(sim800c_task, "sim800c_task", 8192, NULL, 6, NULL);
+  
+  //xTaskCreate(sms_control_task, "sms_control_task", 4096, NULL, 4, NULL);
 
+  xTaskCreate(espnow_receiver_task, "espnow_receiver_task", 4096, NULL, 6, NULL);
+ 
+   xTaskCreate(getWebServerData_task, "getWebServerData_task", 4096, NULL, 6, NULL);
+
+  ESP_LOGI(TAG, "ESP-NOW Receiver initialized and waiting for data...");
 
 }

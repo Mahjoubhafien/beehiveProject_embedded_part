@@ -10,10 +10,23 @@
 #include "freertos/task.h"
 #include "driver/uart.h"
 #include "esp_log.h"
+#include <stdbool.h>
 #include <string.h>
 #include <sys/unistd.h>
 #include"sim800c.h"
 #include "main.h"
+
+// SMS Alerts Related Parameters
+bool isAlertsON = true;
+bool sim800Reset = false;
+bool isAlertStopLocal = false;
+bool isAlertStopRemote = false;
+int alertCounterLocal = 0;
+int alertCounterRemote = 0;
+float MIN_TEMP = 32;
+float MAX_TEMP = 36;
+float MIN_HUMIDITY = 50;
+float MAX_HUMIDITY = 70;
 
 static const char *SIM_TAG = "SIM800C";
 
@@ -24,15 +37,42 @@ uint8_t error_count=0;
     DHTData_t latestDHT = {0};  // Initialize to avoid garbage
     GPSData_t latestGPS = {0};
     ESPNowData_t latestESPNow = {0};
+    
+    
+    
+void sim800_send_sms(const char *number, const char *message) {
+    char buffer[128];
 
+    if (xSemaphoreTake(sim800_uart_mutex, portMAX_DELAY) == pdTRUE) {
+        // Set SMS text mode (very important before sending)
+        uart_write_bytes(UART_PORT, "AT+CMGF=1\r\n", strlen("AT+CMGF=1\r\n"));
+        vTaskDelay(pdMS_TO_TICKS(500));
 
+        // Prepare the CMGS command
+        sprintf(buffer, "AT+CMGS=\"%s\"\r\n", number);
+        uart_write_bytes(UART_PORT, buffer, strlen(buffer));
+        vTaskDelay(pdMS_TO_TICKS(500));  // Wait for '>' prompt
 
+        // Send the message body
+        uart_write_bytes(UART_PORT, message, strlen(message));
+        uart_write_bytes(UART_PORT, "\x1A", 1);  // CTRL+Z to send
+        vTaskDelay(pdMS_TO_TICKS(5000)); // Wait for sending to complete
+
+        ESP_LOGI(SIM_TAG, "SMS sent to %s: %s", number, message);
+
+        xSemaphoreGive(sim800_uart_mutex);
+    } else {
+        ESP_LOGE(SIM_TAG, "Failed to take sim800_uart_mutex in sim800_send_sms");
+    }
+}
+
+/*
 void sim800c_reset(void){
 	
+	ESP_LOGI(SIM_TAG, "=== Start SIM800C Reset ===");
+
 	sim800_send_command("AT+CFUN=1,1");
     vTaskDelay(pdMS_TO_TICKS(10000));
-
-    ESP_LOGI(SIM_TAG, "=== SIM800C Reset ===");
 
     sim800_send_command("AT+SAPBR=3,1,\"Contype\",\"GPRS\"");
     sim800_wait_response();
@@ -57,7 +97,7 @@ void sim800c_reset(void){
     sim800_wait_response();
 
     // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.2.43.204:5000/temphum\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.14.101.52:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
     
     // Specify content type (application/json for JSON data)
@@ -69,42 +109,58 @@ void sim800c_reset(void){
 	sim800_send_command("AT+HTTPPARA=\"REDIR\",1");
 	sim800_wait_response();
 	
-}
+}*/
 
 void sim800_send_command(const char *cmd) {
-    uart_flush(UART_PORT);
-    uart_write_bytes(UART_PORT, cmd, strlen(cmd));
-    uart_write_bytes(UART_PORT, "\r\n", 2);  // CR+LF
-}
-void sim800_send_raw(const char *data) {
-    uart_write_bytes(UART_PORT, data, strlen(data));
-    ESP_LOGI("SIM800C", "Sent raw data: %s", data);
-}
-// === Wait for response ===
-void sim800_wait_response() {
-    uint8_t data[BUF_SIZE];
-    memset(data, 0, sizeof(data));
-
-    int len = uart_read_bytes(UART_PORT, data, BUF_SIZE - 1, pdMS_TO_TICKS(AT_CMD_TIMEOUT_MS));
-    if (len > 0) {
-        data[len] = '\0';
-        if (strstr((char *)data, "ERROR") != NULL) {
-			error_count++;
-            ESP_LOGE(SIM_TAG, "Response Error:\n%s", (char *)data);
-            ESP_LOGW(SIM_TAG, "Error Number %d",error_count );
-            if (error_count>=5){
-			error_count =0;
-			sim800c_reset();
-		}
-
-        } else {
-            ESP_LOGI(SIM_TAG, "Response:\n%s", (char *)data);
-        }
+    if (xSemaphoreTake(sim800_uart_mutex, portMAX_DELAY) == pdTRUE) {
+        uart_flush(UART_PORT);
+        uart_write_bytes(UART_PORT, cmd, strlen(cmd));
+        uart_write_bytes(UART_PORT, "\r\n", 2);  // CR+LF
+        xSemaphoreGive(sim800_uart_mutex);
     } else {
-        ESP_LOGW(SIM_TAG, "No response or timeout");
-        
+        ESP_LOGE("SIM800C", "Failed to take mutex for send_command");
     }
+}
 
+void sim800_send_raw(const char *data) {
+    if (xSemaphoreTake(sim800_uart_mutex, portMAX_DELAY) == pdTRUE) {
+        uart_write_bytes(UART_PORT, data, strlen(data));
+        ESP_LOGI("SIM800C", "Sent raw data: %s", data);
+        xSemaphoreGive(sim800_uart_mutex);
+    } else {
+        ESP_LOGE("SIM800C", "Failed to take mutex for send_raw");
+    }
+}
+
+void sim800_wait_response() {
+    if (xSemaphoreTake(sim800_uart_mutex, portMAX_DELAY) == pdTRUE) {
+        uint8_t data[BUF_SIZE];
+        memset(data, 0, sizeof(data));
+
+        int len = uart_read_bytes(UART_PORT, data, BUF_SIZE - 1, pdMS_TO_TICKS(AT_CMD_TIMEOUT_MS));
+        if (len > 0) {
+            data[len] = '\0';
+            if (strstr((char *)data, "ERROR") != NULL) {
+                error_count++;
+                ESP_LOGE(SIM_TAG, "Response Error:\n%s", (char *)data);
+                ESP_LOGW(SIM_TAG, "Error Number %d", error_count);
+                if (error_count >= 5) {
+    				ESP_LOGI(SIM_TAG, "=== SIM800C Reset ===");
+                    error_count = 0;
+                    //sim800c_reset();
+                    sim800Reset = true;
+                }
+            } else {
+                ESP_LOGI(SIM_TAG, "Response:\n%s", (char *)data);
+            }
+        } else {
+            ESP_LOGW(SIM_TAG, "No response or timeout");
+        }
+
+        xSemaphoreGive(sim800_uart_mutex);
+    } else {
+        ESP_LOGE("SIM800C", "Failed to take mutex for wait_response");
+    }
 }
 
 // === SIM800C Task ===
@@ -203,14 +259,14 @@ void sim800c_task(void *pvParameters) {
 
 }
 void sim800_http_post_task(void) {
-	
 
 	while(1)
     {
+  if (!sim800Reset){
+			
 		DHTData_t tempDHT;
 		GPSData_t tempGPS;
         ESPNowData_t tempESPNow;
-
 		// Try to receive new DHT data
 		if (xQueueReceive(dhtQueue, &tempDHT, pdMS_TO_TICKS(10))) {
   		  latestDHT = tempDHT;  // Update persistent copy
@@ -255,8 +311,104 @@ void sim800_http_post_task(void) {
             latestESPNow.latitude,
             latestESPNow.longitude
         );
+        
+AlertConfig_t active_config;
+if (xQueuePeek(alertConfigQueue, &active_config, pdMS_TO_TICKS(10)) == pdPASS) {  // Non-blocking read
 
-        ESP_LOGI("HTTP POST", "Sending JSON: %s", json_payload);
+    // === LOCAL SENSOR ALERT HANDLER ===
+    if (active_config.is_alerts_on && !isAlertStopLocal) {
+        char alert_msg[256];
+
+        if (!(latestDHT.temperature <= active_config.max_temp && latestDHT.temperature >= active_config.min_temp)) {
+            snprintf(alert_msg, sizeof(alert_msg),
+                "ALERT from sensor-001:\nHigh Temp: %.2f C\nLocation: https://maps.google.com/?q=%.6f,%.6f",
+                latestDHT.temperature,
+                latestGPS.latitude,
+                latestGPS.longitude
+            );
+            sim800_send_sms(user_phone_number, alert_msg);
+            alertCounterLocal++;
+        }
+        else if (!(latestDHT.humidity <= active_config.max_humidity && latestDHT.humidity >= active_config.min_humidity)) {
+            snprintf(alert_msg, sizeof(alert_msg),
+                "ALERT from sensor-001:\nHigh Humidity: %.2f%%\nLocation: https://maps.google.com/?q=%.6f,%.6f",
+                latestDHT.humidity,
+                latestGPS.latitude,
+                latestGPS.longitude
+            );
+            sim800_send_sms(user_phone_number, alert_msg);
+            alertCounterLocal++;
+        }
+
+        if (alertCounterLocal >= 5) {
+            ESP_LOGI("SIM800C", "Calling due to local sensor alert...");
+            char call_cmd[64];
+            snprintf(call_cmd, sizeof(call_cmd), "ATD%s;", user_phone_number);
+            sim800_send_command(call_cmd);
+            sim800_wait_response();
+            alertCounterLocal = 0;
+            isAlertStopLocal = true;
+        }
+    }
+
+    // === REMOTE SENSOR ALERT HANDLER ===
+    if (active_config.is_alerts_on && !isAlertStopRemote) {
+        char alert_msg[256];
+
+        if (!(latestESPNow.temperature <= active_config.max_temp && latestESPNow.temperature >= active_config.min_temp)) {
+            snprintf(alert_msg, sizeof(alert_msg),
+                "ALERT from %s:\nHigh Temp: %.2f C\nLocation: https://maps.google.com/?q=%.6f,%.6f",
+                latestESPNow.sensor_id,
+                latestESPNow.temperature,
+                latestESPNow.latitude,
+                latestESPNow.longitude
+            );
+            sim800_send_sms(user_phone_number, alert_msg);
+            alertCounterRemote++;
+        }
+        else if (!(latestESPNow.humidity <= active_config.max_humidity && latestESPNow.humidity >= active_config.min_humidity)) {
+            snprintf(alert_msg, sizeof(alert_msg),
+                "ALERT from %s:\nHigh Humidity: %.2f%%\nLocation: https://maps.google.com/?q=%.6f,%.6f",
+                latestESPNow.sensor_id,
+                latestESPNow.humidity,
+                latestESPNow.latitude,
+                latestESPNow.longitude
+            );
+            sim800_send_sms(user_phone_number, alert_msg);
+            alertCounterRemote++;
+        }
+
+        if (alertCounterRemote >= 5) {
+            ESP_LOGI("SIM800C", "Calling due to remote sensor alert...");
+            char call_cmd[64];
+            snprintf(call_cmd, sizeof(call_cmd), "ATD%s;", user_phone_number);
+            sim800_send_command(call_cmd);
+            sim800_wait_response();
+            alertCounterRemote = 0;
+            isAlertStopRemote = true;
+        }
+    }
+
+    // === Reset LOCAL alert if safe ===
+    if ((latestDHT.temperature <= active_config.max_temp && latestDHT.temperature >= active_config.min_temp) &&
+        (latestDHT.humidity <= active_config.max_humidity && latestDHT.humidity >= active_config.min_humidity)) {
+        isAlertStopLocal = false;
+        alertCounterLocal = 0;
+    }
+
+    // === Reset REMOTE alert if safe ===
+    if ((latestESPNow.temperature <= active_config.max_temp && latestESPNow.temperature >= active_config.min_temp) &&
+        (latestESPNow.humidity <= active_config.max_humidity && latestESPNow.humidity >= active_config.min_humidity)) {
+        isAlertStopRemote = false;
+        alertCounterRemote = 0;
+    }
+
+} else {
+    ESP_LOGW("ALERT", "No configuration available in alertConfigQueue.");
+}
+
+
+    ESP_LOGI("HTTP POST", "Sending JSON: %s", json_payload);
 	
     ESP_LOGI("SIM800C", "=== Starting HTTP POST Task ===");
     
@@ -270,6 +422,11 @@ void sim800_http_post_task(void) {
     // Send the actual data (Post data in JSON format)
     sim800_send_raw(json_payload);  // POST data in JSON format
     sim800_wait_response();
+    
+        // Set the URL for the HTTP POST request
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.14.101.52:5000/temphum\"");  // Set the POST URL
+    sim800_wait_response();
+
     	
     // Trigger the HTTP POST action
     sim800_send_command("AT+HTTPACTION=1");  // 1 indicates a POST request
@@ -289,10 +446,75 @@ void sim800_http_post_task(void) {
 
     ESP_LOGI("SIM800C", "=== HTTP POST Done ===");
     
-     vTaskDelay(pdMS_TO_TICKS(30000));  // 300000 ms = 5 minutes
+    
+	
 
 
+    }else{
+	ESP_LOGI(SIM_TAG, "=== Start SIM800C Reset ===");
+
+	sim800_send_command("AT+CFUN=1,1");
+    vTaskDelay(pdMS_TO_TICKS(10000));
+
+   
+    sim800_send_command("AT");
+    sim800_wait_response();
+    
+    sim800_send_command("AT+CPIN?");
+    sim800_wait_response();
+
+    sim800_send_command("AT+CSQ");
+    sim800_wait_response();
+
+    sim800_send_command("AT+CREG?");
+    sim800_wait_response();
+
+    sim800_send_command("AT+CGATT=1");
+    sim800_wait_response();
+
+    sim800_send_command("AT+SAPBR=3,1,\"Contype\",\"GPRS\"");
+    sim800_wait_response();
+
+    sim800_send_command("AT+SAPBR=3,1,\"APN\",\"internet.tn\"");
+    sim800_wait_response();
+
+     // Initialize the GPRS connection (activate the bearer profile and connect to the network)
+    sim800_send_command("AT+SAPBR=1,1");   // Activate bearer profile
+    sim800_wait_response();
+
+    sim800_send_command("AT+SAPBR=2,1");   // Query bearer profile (check if connected)
+    sim800_wait_response();
+    
+    		
+    // Initialize HTTP connection
+    sim800_send_command("AT+HTTPINIT");    // Initialize HTTP service
+    sim800_wait_response();
+	
+    // Set up the CID (context ID for the bearer profile)
+    sim800_send_command("AT+HTTPPARA=\"CID\",1");  // Set CID to 1
+    sim800_wait_response();
+
+    // Set the URL for the HTTP POST request
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.14.101.52:5000/temphum\"");  // Set the POST URL
+    sim800_wait_response();
+    
+    // Specify content type (application/json for JSON data)
+    sim800_send_command("AT+HTTPPARA=\"CONTENT\",\"application/json\"");  // Set the content type for JSON
+    sim800_wait_response();
+    
+    // Set SMS text mode
+    uart_write_bytes(UART_PORT, "AT+CMGF=1\r\n", strlen("AT+CMGF=1\r\n"));
+    
+    sim800Reset = false;
+    
+    ESP_LOGI(SIM_TAG, "=== End SIM800C Reset ===");
+
+	}
+	
+		//SIM800c task delay
+    	vTaskDelay(pdMS_TO_TICKS(5000));  // 5s
     }
+    
   }
   
 void sim800_http_get_task(void) {

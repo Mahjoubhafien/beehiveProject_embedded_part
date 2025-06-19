@@ -18,6 +18,13 @@
 #define RX_PIN             GPIO_NUM_23
 #define BUF_SIZE           1024
 #define AT_CMD_TIMEOUT_MS  2000
+
+//SMS alerts configuration
+#define user_phone_number  "+21694842008"
+
+
+
+
 void sim800c_reset (void);
 void sim800_wait_response();
 void sim800c_task(void *pvParameters);
@@ -26,5 +33,6 @@ void sim800_http_post_task(void);
 void sim800_send_raw(const char *data);
 void sim800_http_get_task(void);
 void sim800_http_post_data_task(float temperature, float humidity, float weight, const char* location);
+void sim800_send_sms(const char *number, const char *message);
 
 #endif /* MAIN_SIM800C_H_ */
