@@ -33,6 +33,8 @@ static const char *SIM_TAG = "SIM800C";
 TaskHandle_t sim800_task_handle = NULL;
 
 uint8_t error_count=0;
+uint8_t max_error_count=3;
+
 
     DHTData_t latestDHT = {0};  // Initialize to avoid garbage
     GPSData_t latestGPS = {0};
@@ -144,7 +146,7 @@ void sim800_wait_response() {
                 error_count++;
                 ESP_LOGE(SIM_TAG, "Response Error:\n%s", (char *)data);
                 ESP_LOGW(SIM_TAG, "Error Number %d", error_count);
-                if (error_count >= 5) {
+                if (error_count >= max_error_count) {
     				ESP_LOGI(SIM_TAG, "=== SIM800C Reset ===");
                     error_count = 0;
                     //sim800c_reset();
@@ -319,7 +321,7 @@ if (xQueuePeek(alertConfigQueue, &active_config, pdMS_TO_TICKS(10)) == pdPASS) {
     if (active_config.is_alerts_on && !isAlertStopLocal) {
         char alert_msg[256];
 
-        if (!(latestDHT.temperature <= active_config.max_temp && latestDHT.temperature >= active_config.min_temp)) {
+        if (latestDHT.temperature != 0 && !(latestDHT.temperature <= active_config.max_temp && latestDHT.temperature >= active_config.min_temp) && !0) {
             snprintf(alert_msg, sizeof(alert_msg),
                 "ALERT from sensor-001:\nHigh Temp: %.2f C\nLocation: https://maps.google.com/?q=%.6f,%.6f",
                 latestDHT.temperature,
@@ -329,7 +331,7 @@ if (xQueuePeek(alertConfigQueue, &active_config, pdMS_TO_TICKS(10)) == pdPASS) {
             sim800_send_sms(user_phone_number, alert_msg);
             alertCounterLocal++;
         }
-        else if (!(latestDHT.humidity <= active_config.max_humidity && latestDHT.humidity >= active_config.min_humidity)) {
+        else if (latestDHT.humidity != 0 && !(latestDHT.humidity <= active_config.max_humidity && latestDHT.humidity >= active_config.min_humidity)) {
             snprintf(alert_msg, sizeof(alert_msg),
                 "ALERT from sensor-001:\nHigh Humidity: %.2f%%\nLocation: https://maps.google.com/?q=%.6f,%.6f",
                 latestDHT.humidity,
@@ -355,7 +357,7 @@ if (xQueuePeek(alertConfigQueue, &active_config, pdMS_TO_TICKS(10)) == pdPASS) {
     if (active_config.is_alerts_on && !isAlertStopRemote) {
         char alert_msg[256];
 
-        if (!(latestESPNow.temperature <= active_config.max_temp && latestESPNow.temperature >= active_config.min_temp)) {
+        if (latestESPNow.temperature != 0 && !(latestESPNow.temperature <= active_config.max_temp && latestESPNow.temperature >= active_config.min_temp)) {
             snprintf(alert_msg, sizeof(alert_msg),
                 "ALERT from %s:\nHigh Temp: %.2f C\nLocation: https://maps.google.com/?q=%.6f,%.6f",
                 latestESPNow.sensor_id,
@@ -366,7 +368,7 @@ if (xQueuePeek(alertConfigQueue, &active_config, pdMS_TO_TICKS(10)) == pdPASS) {
             sim800_send_sms(user_phone_number, alert_msg);
             alertCounterRemote++;
         }
-        else if (!(latestESPNow.humidity <= active_config.max_humidity && latestESPNow.humidity >= active_config.min_humidity)) {
+        else if (latestESPNow.humidity != 0 && !(latestESPNow.humidity <= active_config.max_humidity && latestESPNow.humidity >= active_config.min_humidity)) {
             snprintf(alert_msg, sizeof(alert_msg),
                 "ALERT from %s:\nHigh Humidity: %.2f%%\nLocation: https://maps.google.com/?q=%.6f,%.6f",
                 latestESPNow.sensor_id,
@@ -424,7 +426,7 @@ if (xQueuePeek(alertConfigQueue, &active_config, pdMS_TO_TICKS(10)) == pdPASS) {
     sim800_wait_response();
     
         // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.14.101.52:5000/temphum\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"41.62.50.109:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
 
     	

@@ -144,7 +144,7 @@ void sim800c_init(void){
     sim800_wait_response();
 
     // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.14.101.52:5000/temphum\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"41.62.50.109:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
     
     // Specify content type (application/json for JSON data)

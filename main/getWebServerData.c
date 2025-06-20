@@ -47,7 +47,7 @@ void getWebServerData_task(void *pvParameters) {
 	ESP_LOGI("SIM800C", "=== Starting HTTP GET Task ===");
 
     // Set the URL for the HTTP GET request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.14.101.52:5000/api/alert-config\"");  // Set the GET URL to httpbin.org
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"41.62.50.109:5000/api/alert-config\"");  // Set the GET URL to httpbin.org
     sim800_wait_response();
 
     // Trigger the HTTP GET action

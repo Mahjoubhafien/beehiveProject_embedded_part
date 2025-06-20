@@ -20,7 +20,7 @@
 #define AT_CMD_TIMEOUT_MS  2000
 
 //SMS alerts configuration
-#define user_phone_number  "+21694842008"
+#define user_phone_number  "+21693617570"
 
 
 
