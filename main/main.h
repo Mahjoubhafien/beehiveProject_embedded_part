@@ -48,6 +48,8 @@ typedef struct {
     int max_temp;
     int min_humidity;
     int max_humidity;
+    int min_weight;
+    int max_weight;
     bool is_alerts_on;
 } AlertConfig_t;
 

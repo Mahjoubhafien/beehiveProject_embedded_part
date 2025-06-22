@@ -101,7 +101,6 @@ void GPS_UART_init(void)
 //sim800c init need to be repeated 3 time to be init without error!
 void sim800c_init(void){
 	
-	for (int attempt = 1; attempt <= 3; attempt++) {
 	// Wait for SIM800C boot
 	sim800_send_command("AT+CFUN=1,1");
     vTaskDelay(pdMS_TO_TICKS(10000));
@@ -177,7 +176,7 @@ void sim800c_init(void){
 	sim800_send_command("AT+HTTPSSL=1");       
 	sim800_wait_response();
 */
-}
+
     ESP_LOGI("SIM_INIT", "SIM800C Initialization Complete.");
 	
 }
@@ -207,14 +206,14 @@ void app_main(void) {
 	//init Uart
 	
 	sim800_UART_init();
-   	//GPS_UART_init();
+   	GPS_UART_init();
    	 sim800c_init();
    	 
   /////////////////////////////////////////////// Start tasks ////////////////////////////////////
  
   xTaskCreate(dht_test, "dht21_task", 4096, NULL, 6, NULL);
   
-  //xTaskCreate(gps_task, "gps_task", 4096, NULL, 6, NULL);
+  xTaskCreate(gps_task, "gps_task", 4096, NULL, 6, NULL);
   
   xTaskCreate(sim800c_task, "sim800c_task", 8192, NULL, 6, NULL);
   

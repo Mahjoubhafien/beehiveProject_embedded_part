@@ -18,13 +18,15 @@
 void parse_alert_config(const char *json, AlertConfig_t *config) {
     char alerts_state[6] = {0};
 
-    sscanf(json,
-           "{\"MIN_TEMP\":%d,\"MAX_TEMP\":%d,\"MIN_HUMIDITY\":%d,\"MAX_HUMIDITY\":%d,\"isAlertsON\":%5[^}]",
-           &config->min_temp,
-           &config->max_temp,
-           &config->min_humidity,
-           &config->max_humidity,
-           alerts_state);
+sscanf(json,
+       "{\"MIN_TEMP\":%d,\"MAX_TEMP\":%d,\"MIN_HUMIDITY\":%d,\"MAX_HUMIDITY\":%d,\"MIN_WEIGHT\":%d,\"MAX_WEIGHT\":%d,\"isAlertsON\":%5[^}]}",
+       &config->min_temp,
+       &config->max_temp,
+       &config->min_humidity,
+       &config->max_humidity,
+       &config->min_weight,
+       &config->max_weight,
+       alerts_state);
 
     config->is_alerts_on = (strstr(alerts_state, "true") != NULL);
 }
@@ -47,7 +49,7 @@ void getWebServerData_task(void *pvParameters) {
 	ESP_LOGI("SIM800C", "=== Starting HTTP GET Task ===");
 
     // Set the URL for the HTTP GET request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.26.165.184:5000/api/public_alert-config?user_id=2\"");  // Set the GET URL to httpbin.org
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"http://197.26.165.184:5000/api/public_alert-config?user_id=1\"");  // Set the GET URL to httpbin.org
     sim800_wait_response();
 
     // Trigger the HTTP GET action
