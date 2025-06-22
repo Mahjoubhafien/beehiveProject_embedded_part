@@ -426,7 +426,7 @@ if (xQueuePeek(alertConfigQueue, &active_config, pdMS_TO_TICKS(10)) == pdPASS) {
     sim800_wait_response();
     
         // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"41.62.50.109:5000/temphum\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.26.165.184:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
 
     	

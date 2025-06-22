@@ -98,9 +98,11 @@ void GPS_UART_init(void)
 
 	uart_set_pin(GPS_UART_PORT, GPS_TXD_PIN, GPS_RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 } 
+//sim800c init need to be repeated 3 time to be init without error!
 void sim800c_init(void){
-	    // Wait for SIM800C boot
-
+	
+	for (int attempt = 1; attempt <= 3; attempt++) {
+	// Wait for SIM800C boot
 	sim800_send_command("AT+CFUN=1,1");
     vTaskDelay(pdMS_TO_TICKS(10000));
 
@@ -144,7 +146,7 @@ void sim800c_init(void){
     sim800_wait_response();
 
     // Set the URL for the HTTP POST request
-    sim800_send_command("AT+HTTPPARA=\"URL\",\"41.62.50.109:5000/temphum\"");  // Set the POST URL
+    sim800_send_command("AT+HTTPPARA=\"URL\",\"197.26.165.184:5000/temphum\"");  // Set the POST URL
     sim800_wait_response();
     
     // Specify content type (application/json for JSON data)
@@ -175,9 +177,9 @@ void sim800c_init(void){
 	sim800_send_command("AT+HTTPSSL=1");       
 	sim800_wait_response();
 */
+}
     ESP_LOGI("SIM_INIT", "SIM800C Initialization Complete.");
-
-
+	
 }
 void app_main(void) {
 	// Create the queue with space for 5 SensorData_t elements
